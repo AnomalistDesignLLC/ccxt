@@ -3,8 +3,7 @@
 //  ---------------------------------------------------------------------------
 
 const Exchange = require ('./base/Exchange');
-const { ExchangeError, ExchangeNotAvailable, AuthenticationError, InvalidOrder, InsufficientFunds, OrderNotFound, DDoSProtection, PermissionDenied, AddressPending } = require ('./base/errors');
-const { TRUNCATE, DECIMAL_PLACES } = require ('./base/functions/number');
+const { ExchangeError, ExchangeNotAvailable, AuthenticationError, InvalidOrder, OrderNotFound, DDoSProtection } = require ('./base/errors');
 
 //  ---------------------------------------------------------------------------
 
@@ -19,6 +18,7 @@ module.exports = class bitasset extends Exchange {
             'certified': true,
             // new metainfo interface
             'has': {
+                'fetchBalance': true,
                 'fetchMarkets': true,
                 'fetchCurrencies': true,
                 'CORS': false,
@@ -35,13 +35,14 @@ module.exports = class bitasset extends Exchange {
                 'fetchWithdrawals': false,
                 'fetchTransactions': false,
                 'fetchOrderBook': false,
-                'fetchL2OrderBook': false
+                'fetchL2OrderBook': false,
             },
             'hostname': 'api.bitasset.com',
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/27766352-cf0b3c26-5ed5-11e7-82b7-f3826b7a97d8.jpg',
                 'api': {
                     'public': 'https://{hostname}',
+                    'accounts': 'https://{hostname}',
                 },
                 'www': 'https://bitasset.com',
                 'doc': [
@@ -53,36 +54,23 @@ module.exports = class bitasset extends Exchange {
                     'https://bitasset.zendesk.com/hc/en-us/articles/115000199651-What-fees-does-bitasset-charge-',
                 ],
             },
-            'hostname': 'api.bitasset.com',
             'api': {
                 'public': {
                     'get': [
                         'symbols',
-                        'currencies'
+                        'currencies',
                     ],
-                }
-            }
+                },
+                'accounts': {
+                    'get': [
+                        'balance',
+                    ],
+                },
+            },
         });
     }
 
     async fetchMarkets (params = {}) {
-        // {
-        //     "code" : 0,
-        //     "msg" : "success",
-        //     "data" : [ 
-        //         {
-        //             "id" : 1,
-        //             "name" : "USDT-CNYT",
-        //             "baseCurrency" : "CNYT",
-        //             "quoteCurrency" : "USDT",
-        //             "priceDecimal" : 4,
-        //             "amountDecimal" : 1,
-        //             "takerFeeRatio" : 0,
-        //             "makerFeeRatio" : 0
-        //         },
-        //         ...,
-        //     ]
-        // }
         const response = await this.publicGetSymbols ();
         const result = [];
         const markets = this.safeValue (response, 'data');
@@ -106,19 +94,6 @@ module.exports = class bitasset extends Exchange {
 
     async fetchCurrencies (params = {}) {
         const response = await this.publicGetCurrencies (params);
-
-        //   {
-        //       "code" : 0,
-        //       "msg" : "success",
-        //       "data" : [
-        //           {
-        //               "id" : 1,
-        //               "name" : "CNYT"
-        //           },
-        //           ...,
-        //       ]
-        //
-        //   }
         const currencies = this.safeValue (response, 'data', []);
         const result = {};
         for (let i = 0; i < currencies.length; i++) {
@@ -135,6 +110,29 @@ module.exports = class bitasset extends Exchange {
         return result;
     }
 
+    async fetchBalance (params = {}) {
+        await this.loadMarkets ();
+        let response = await this.accountsGetBalance (params);
+        let balances = response['data'];
+        let result = { 'info': balances };
+        let indexed = this.indexBy (balances, 'currency');
+        let keys = Object.keys (indexed);
+        for (let i = 0; i < keys.length; i++) {
+            let id = keys[i];
+            let currency = this.commonCurrencyCode (id);
+            let account = this.account ();
+            let balance = indexed[id];
+            let free = this.safeFloat (balance, 'available', 0);
+            let total = this.safeFloat (balance, 'balance', 0);
+            let used = this.safeFloat (balance, 'frozen', 0);
+            account['free'] = free;
+            account['used'] = used;
+            account['total'] = total;
+            result[currency] = account;
+        }
+        return this.parseBalance (result);
+    }
+
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
         let url = this.implodeParams (this.urls['api'][api], {
             'hostname': this.hostname,
@@ -147,18 +145,17 @@ module.exports = class bitasset extends Exchange {
         } else {
             this.checkRequiredCredentials ();
             url += api + '/';
-            if (((api === 'account') && (path !== 'withdraw')) || (path === 'openorders'))
-                url += method.toLowerCase ();
             const request = {
-                'apikey': this.apiKey,
+                'apiAccessKey': this.apiKey,
             };
-            const disableNonce = this.safeValue (this.options, 'disableNonce');
-            if ((disableNonce === undefined) || !disableNonce) {
-                request['nonce'] = this.nonce ();
-            }
+            request['apiTimeStamp'] = this.milliseconds ();
             url += path + '?' + this.urlencode (this.extend (request, params));
-            let signature = this.hmac (this.encode (url), this.encode (this.secret), 'sha512');
-            headers = { 'apisign': signature };
+            let secret = this.hash (this.encode (this.secret), 'sha1');
+            let signature = this.hmac (this.urlencode (this.extend (request, params)), this.encode (secret), 'SHA256');
+            url += '&' + this.urlencode (this.extend ({
+                'apiSign': signature,
+            }));
+            headers = {};
         }
         return { 'url': url, 'method': method, 'body': body, 'headers': headers };
     }

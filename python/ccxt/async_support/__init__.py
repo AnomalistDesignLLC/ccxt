@@ -56,6 +56,7 @@ from ccxt.async_support.bibox import bibox                                # noqa
 from ccxt.async_support.bigone import bigone                              # noqa: F401
 from ccxt.async_support.binance import binance                            # noqa: F401
 from ccxt.async_support.bit2c import bit2c                                # noqa: F401
+from ccxt.async_support.bitasset import bitasset                          # noqa: F401
 from ccxt.async_support.bitbank import bitbank                            # noqa: F401
 from ccxt.async_support.bitbay import bitbay                              # noqa: F401
 from ccxt.async_support.bitfinex import bitfinex                          # noqa: F401
@@ -191,6 +192,7 @@ exchanges = [
     'bigone',
     'binance',
     'bit2c',
+    'bitasset',
     'bitbank',
     'bitbay',
     'bitfinex',

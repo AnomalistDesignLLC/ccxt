@@ -214,6 +214,9 @@ let testExchange = async exchange => {
         await testSymbol (exchange, symbol)
     }
 
+    exchange.apiKey = "akeb04fbc4ca794170";
+    exchange.secret = "d56b446a89f64c7a8ca81ba6f00bcbb3";
+
     if (!exchange.apiKey || (exchange.apiKey.length < 1))
         return true
 

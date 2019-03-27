@@ -333,6 +333,7 @@ declare module 'ccxt' {
     export class bigone extends Exchange {}
     export class binance extends Exchange {}
     export class bit2c extends Exchange {}
+    export class bitasset extends Exchange {}
     export class bitbank extends Exchange {}
     export class bitbay extends Exchange {}
     export class bitfinex extends Exchange {}

@@ -90,6 +90,7 @@ class Exchange {
         'bigone',
         'binance',
         'bit2c',
+        'bitasset',
         'bitbank',
         'bitbay',
         'bitfinex',
